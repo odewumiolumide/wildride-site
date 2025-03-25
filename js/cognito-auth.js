@@ -1,4 +1,4 @@
-/*global WildRydes _config AmazonCognitoIdentity AWSCognito*/
+/*global WildRydes _config AmazonCognitoIdentity AWSCognito CryptoJS*/
 
 var WildRydes = window.WildRydes || {};
 
@@ -47,6 +47,14 @@ var WildRydes = window.WildRydes || {};
         }
     });
 
+    // Calculate the secret hash
+    function calculateSecretHash(username) {
+        const clientId = _config.cognito.userPoolClientId;
+        const clientSecret = 'h4ofafi2mv5vrtlq83o81e6pl5scrfht1uqishapspd5tovbid4'; // Your client secret
+        const message = username + clientId;
+        const hash = CryptoJS.HmacSHA256(message, clientSecret);
+        return CryptoJS.enc.Base64.stringify(hash);
+    }
 
     /*
      * Cognito User Pool functions
@@ -58,22 +66,26 @@ var WildRydes = window.WildRydes || {};
             Value: email
         };
         var attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute(dataEmail);
+        var secretHash = calculateSecretHash(toUsername(email)); // Calculate the secret hash
 
-        userPool.signUp(toUsername(email), password, [attributeEmail], null,
-            function signUpCallback(err, result) {
-                if (!err) {
-                    onSuccess(result);
-                } else {
-                    onFailure(err);
-                }
+        userPool.signUp(toUsername(email), password, [attributeEmail], {
+            SecretHash: secretHash // Include the secret hash
+        }, function signUpCallback(err, result) {
+            if (!err) {
+                onSuccess(result);
+            } else {
+                onFailure(err);
             }
-        );
+        });
     }
 
     function signin(email, password, onSuccess, onFailure) {
+        var secretHash = calculateSecretHash(toUsername(email)); // Calculate the secret hash
+
         var authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
             Username: toUsername(email),
-            Password: password
+            Password: password,
+            SecretHash: secretHash // Include the secret hash
         });
 
         var cognitoUser = createCognitoUser(email);
@@ -137,10 +149,8 @@ var WildRydes = window.WildRydes || {};
         var onSuccess = function registerSuccess(result) {
             var cognitoUser = result.user;
             console.log('user name is ' + cognitoUser.getUsername());
-            var confirmation = ('Registration successful. Please check your email inbox or spam folder for your verification code.');
-            if (confirmation) {
-                window.location.href = 'verify.html';
-            }
+            alert('Registration successful. Please check your email inbox or spam folder for your verification code.');
+            window.location.href = 'verify.html';
         };
         var onFailure = function registerFailure(err) {
             alert(err);
